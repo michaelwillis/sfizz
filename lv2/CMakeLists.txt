@@ -24,6 +24,7 @@ set (LV2PLUGIN_TTL_SRC_FILES
 )
 add_library (${LV2PLUGIN_PRJ_NAME} SHARED ${CMAKE_PROJECT_NAME}.c ${LV2PLUGIN_TTL_SRC_FILES})
 target_link_libraries (${LV2PLUGIN_PRJ_NAME} ${CMAKE_PROJECT_NAME}::${CMAKE_PROJECT_NAME})
+target_link_options(${LV2PLUGIN_PRJ_NAME} PRIVATE "LINKER:--exclude-libs,ALL")
 
 # Fetch required LV2 include files
 include(FetchContent)
@@ -49,6 +50,7 @@ endif()
 set_target_properties (${LV2PLUGIN_PRJ_NAME} PROPERTIES PREFIX "")
 set_target_properties (${LV2PLUGIN_PRJ_NAME} PROPERTIES OUTPUT_NAME "${CMAKE_PROJECT_NAME}")
 set_target_properties (${LV2PLUGIN_PRJ_NAME} PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
+set_target_properties (${LV2PLUGIN_PRJ_NAME} PROPERTIES C_VISIBILITY_PRESET hidden)
 
 # Generate *.ttl files from *.in sources,
 # create the destination directory if it doesn't exists and copy needed files
