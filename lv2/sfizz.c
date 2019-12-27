@@ -693,7 +693,7 @@ run(LV2_Handle instance, uint32_t sample_count)
         self->sample_counter -= LOG_SAMPLE_COUNT;
     }
 
-    if ((int)   sample_count != self->max_block_size) {
+    if ((int)sample_count != self->max_block_size) {
         lv2_log_note(&self->logger, "Sample count: %d (max block size %d)", sample_count, self->max_block_size);
     }
 
