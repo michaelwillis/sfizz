@@ -70,7 +70,7 @@
 #define UNUSED(x) (void)(x)
 
 #ifndef NDEBUG
-#define LV2_DEBUG(...) lv2_log_note(&self->logger, "[DEBUG] " __VA_ARGS__)
+#define LV2_DEBUG(...) lv2_log_note(&self->logger, "[sfizz DEBUG] " __VA_ARGS__)
 #else
 #define LV2_DEBUG(...)
 #endif
@@ -383,6 +383,7 @@ cleanup(LV2_Handle instance)
     sfizz_plugin_t *self = (sfizz_plugin_t *)instance;
     sfizz_free(self->synth);
     free(self);
+    LV2_DEBUG("cleanup() called");
 }
 
 static void
@@ -391,12 +392,15 @@ activate(LV2_Handle instance)
     sfizz_plugin_t *self = (sfizz_plugin_t *)instance;
     sfizz_set_samples_per_block(self->synth, self->max_block_size);
     sfizz_set_sample_rate(self->synth, self->sample_rate);
+    LV2_DEBUG("activate() called; block size %d and sample rate %f", self->max_block_size, self->sample_rate);
 }
 
 static void
 deactivate(LV2_Handle instance)
 {
-    UNUSED(instance);
+    sfizz_plugin_t *self = (sfizz_plugin_t *)instance;
+    UNUSED(self);
+    LV2_DEBUG("deactivate() called");
 }
 
 static void
@@ -487,28 +491,28 @@ sfizz_lv2_process_midi_event(sfizz_plugin_t *self, const LV2_Atom_Event *ev)
     switch (lv2_midi_message_type(msg))
     {
     case LV2_MIDI_MSG_NOTE_ON:
-        // LV2_DEBUG("[process_midi] Received note on %d/%d at time %ld\n", msg[0], msg[1], ev->time.frames);
+        // LV2_DEBUG("Received note on %d/%d at time %ld\n", msg[0], msg[1], ev->time.frames);
         sfizz_send_note_on(self->synth,
                            (int)ev->time.frames,
                            (int)msg[1],
                            msg[2]);
         break;
     case LV2_MIDI_MSG_NOTE_OFF:
-        // LV2_DEBUG("[process_midi] Received note off %d/%d at time %ld\n", msg[0], msg[1], ev->time.frames);
+        // LV2_DEBUG("Received note off %d/%d at time %ld\n", msg[0], msg[1], ev->time.frames);
         sfizz_send_note_off(self->synth,
                             (int)ev->time.frames,
                             (int)msg[1],
                             msg[2]);
         break;
     case LV2_MIDI_MSG_CONTROLLER:
-        // LV2_DEBUG("[process_midi] Received CC %d/%d at time %ld\n", msg[0], msg[1], ev->time.frames);
+        // LV2_DEBUG("Received CC %d/%d at time %ld\n", msg[0], msg[1], ev->time.frames);
         sfizz_send_cc(self->synth,
                       (int)ev->time.frames,
                       (int)msg[1],
                       msg[2]);
         break;
     case LV2_MIDI_MSG_BENDER:
-        // LV2_DEBUG("[process_midi] Received pitch bend %d on channel %d at time %ld\n", PITCH_BUILD_AND_CENTER(msg[1], msg[2]), MIDI_CHANNEL(msg[0]), ev->time.frames);
+        // LV2_DEBUG("Received pitch bend %d on channel %d at time %ld\n", PITCH_BUILD_AND_CENTER(msg[1], msg[2]), MIDI_CHANNEL(msg[0]), ev->time.frames);
         sfizz_send_pitch_wheel(self->synth,
                         (int)ev->time.frames,
                         PITCH_BUILD_AND_CENTER(msg[1], msg[2]));
@@ -674,21 +678,49 @@ run(LV2_Handle instance, uint32_t sample_count)
         }
         self->sample_counter -= LOG_SAMPLE_COUNT;
     }
+
+    if ((int)   sample_count != self->max_block_size) {
+        lv2_log_note(&self->logger, "Sample count: %d (max block size %d)", sample_count, self->max_block_size);
+    }
 #endif
 
     // Render the block
     sfizz_render_block(self->synth, self->output_buffers, 2, (int)sample_count);
+
+    for (uint32_t i = 0; i < sample_count; ++i)
+    {
+        if (self->output_buffers[0][i] >= 1.0f)
+        {
+            LV2_DEBUG("Bad buffer : %f at sample position %d/%d", self->output_buffers[0][i], i, sample_count);
+        //    __builtin_trap();
+        }
+        if (self->output_buffers[1][i] >= 1.0f)
+        {
+            LV2_DEBUG("Bad buffer : %f at sample position %d/%d", self->output_buffers[1][i], i, sample_count);
+        //    __builtin_trap();
+        }
+        if (self->output_buffers[0][i] <= -1.0f)
+        {
+            LV2_DEBUG("Bad buffer : %f at sample position %d/%d", self->output_buffers[0][i], i, sample_count);
+        //    __builtin_trap();
+        }
+        if (self->output_buffers[1][i] <= -1.0f)
+        {
+            LV2_DEBUG("Bad buffer : %f at sample position %d/%d", self->output_buffers[1][i], i, sample_count);
+        //    __builtin_trap();
+        }
+    }
 }
 
 static uint32_t
 lv2_get_options(LV2_Handle instance, LV2_Options_Option *options)
 {
     sfizz_plugin_t *self = (sfizz_plugin_t *)instance;
-    LV2_DEBUG("[DEBUG] get_options called\n");
+    LV2_DEBUG("[sfizz] get_options() called\n");
     for (LV2_Options_Option *opt = options; opt->value; ++opt)
     {
         if (self->unmap) {
-            LV2_DEBUG("[DEBUG] Called for an option with key (subject): %s (%s) \n",
+            LV2_DEBUG("[sfizz] Called for an option with key (subject): %s (%s) \n",
                       self->unmap->unmap(self->unmap->handle, opt->key),
                       self->unmap->unmap(self->unmap->handle, opt->subject));
         }
@@ -717,9 +749,16 @@ lv2_set_options(LV2_Handle instance, const LV2_Options_Option *options)
 {
     sfizz_plugin_t *self = (sfizz_plugin_t *)instance;
 
+    LV2_DEBUG("[sfizz] set_options() called\n");
     // Update the block size and sample rate as needed
     for (const LV2_Options_Option *opt = options; opt->value; ++opt)
     {
+        if (self->unmap) {
+            LV2_DEBUG("[sfizz] Called for an option with key (subject): %s (%s) \n",
+                      self->unmap->unmap(self->unmap->handle, opt->key),
+                      self->unmap->unmap(self->unmap->handle, opt->subject));
+        }
+
         if (opt->key == self->sample_rate_uri)
         {
             sfizz_lv2_parse_sample_rate(self, opt);
