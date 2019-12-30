@@ -790,6 +790,12 @@ restore(LV2_Handle instance,
     UNUSED(features);
     sfizz_plugin_t *self = (sfizz_plugin_t *)instance;
 
+    LV2_State_Map_Path* map_path =
+        (LV2_State_Map_Path*)lv2_features_data(features, LV2_STATE__mapPath);
+
+	if (!map_path)
+		return LV2_STATE_ERR_NO_FEATURE;
+
     // Fetch back the saved file path, if any
     size_t size;
     uint32_t type;
@@ -798,11 +804,15 @@ restore(LV2_Handle instance,
     value = retrieve(handle, self->sfizz_sfz_file_uri, &size, &type, &val_flags);
     if (value)
     {
-        lv2_log_note(&self->logger, "[sfizz] Restoring the file %s\n", (const char *)value);
-        if (sfizz_load_file(self->synth, (const char *)value))
+        const char* abstract_path = (const char*)value;
+	    char*       absolute_path  = map_path->absolute_path(map_path->handle, abstract_path);
+
+        lv2_log_note(&self->logger, "[sfizz] Restoring the file %s\n", absolute_path);
+        if (sfizz_load_file(self->synth, absolute_path))
         {
-            sfizz_lv2_update_file_info(self, (const char *)value);
+            sfizz_lv2_update_file_info(self, absolute_path);
         }
+        free(absolute_path);
     }
 
     value = retrieve(handle, self->sfizz_num_voices_uri, &size, &type, &val_flags);
@@ -853,13 +863,24 @@ save(LV2_Handle instance,
     UNUSED(flags);
     UNUSED(features);
     sfizz_plugin_t *self = (sfizz_plugin_t *)instance;
+
+    LV2_State_Map_Path* map_path =
+        (LV2_State_Map_Path*)lv2_features_data(features, LV2_STATE__mapPath);
+
+	if (!map_path)
+		return LV2_STATE_ERR_NO_FEATURE;
+
+	// Map absolute sample path to an abstract state path
+	char* abstract_path = map_path->abstract_path(map_path->handle, self->sfz_file_path);
+
     // Save the file path
     store(handle,
           self->sfizz_sfz_file_uri,
-          self->sfz_file_path,
-          strlen(self->sfz_file_path) + 1,
+          abstract_path,
+          strlen(abstract_path) + 1,
           self->atom_path_uri,
-          LV2_STATE_IS_POD);
+          LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
+    free(abstract_path);
 
     // Save the number of voices
     store(handle,
