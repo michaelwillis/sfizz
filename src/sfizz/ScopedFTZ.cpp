@@ -23,7 +23,7 @@
 
 #include "ScopedFTZ.h"
 #if (HAVE_X86INTRIN_H)
-#include <x86intrin.h> 
+#include <x86intrin.h>
 #elif (HAVE_INTRIN_H)
 #include <intrin.h>
 #elif (HAVE_ARM_NEON_H)
@@ -49,6 +49,6 @@ ScopedFTZ::~ScopedFTZ()
 #if (HAVE_X86INTRIN_H || HAVE_INTRIN_H)
     _mm_setcsr(registerState);
 #elif HAVE_ARM_NEON_H
-    asm volatile("vmsr %0, fpscr" : : "ri"(registerState));
+    asm volatile("vmrs %0, fpscr" : : "ri"(registerState));
 #endif
 }
